@@ -1,26 +1,35 @@
 #!/usr/bin/env bash
-# receipts-demo/demo.sh — run one receipts backend at a time, because all three
-# bind :5001. The hosted Pages frontend is the client; the backend is local.
+# receipts-demo/demo.sh — control the local backend that the hosted clients detect.
+# All three stacks bind :5001, so this runs one at a time.
 #
 #   demo.sh doctor
-#   demo.sh ocr      # PaddleOCR + Postgres, then open the receipts-ocr Pages URL
-#   demo.sh rag      # Dev Log RAG v1, then open http://localhost:3000
-#   demo.sh rag2     # Dev Log RAG v2, then open the v2 Pages URL
+#   demo.sh state            # one reachability sample (see probe.sh)
+#   demo.sh probe <args>     # passthrough: probe.sh <args>
+#   demo.sh ocr | rag | rag2
 #   demo.sh down
 #   demo.sh shot <url> [out.png]
 #
-# Locate the three repos with RECEIPTS_DIR (parent) or OCR_DIR / RAG_DIR / RAG2_DIR.
+# Repos are found at $RECEIPTS_DIR/<name>, then ~/Documents/<name>.
 set -o pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="${RECEIPTS_DIR:-$HOME/Documents}"
-OCR_DIR="${OCR_DIR:-$BASE/receipts-ocr}"
-RAG_DIR="${RAG_DIR:-$BASE/receipts-ocr-rag}"
-RAG2_DIR="${RAG2_DIR:-$BASE/receipts-ocr-rag-v2}"
 SHOTS="$HERE/shots"
 
+find_repo() {
+    local name="$1" override="$2" c
+    for c in "$override" "$BASE/$name" "$HOME/Documents/$name"; do
+        [ -n "$c" ] || continue
+        [ -f "$c/docker-compose.yml" ] && { printf '%s' "$c"; return 0; }
+    done
+    return 1
+}
+
+OCR_DIR="$(find_repo receipts-ocr "${OCR_DIR:-}")" || OCR_DIR="${OCR_DIR:-$BASE/receipts-ocr}"
+RAG_DIR="$(find_repo receipts-ocr-rag "${RAG_DIR:-}")" || RAG_DIR="${RAG_DIR:-$BASE/receipts-ocr-rag}"
+RAG2_DIR="$(find_repo receipts-ocr-rag-v2 "${RAG2_DIR:-}")" || RAG2_DIR="${RAG2_DIR:-$BASE/receipts-ocr-rag-v2}"
+
 OCR_SITE="https://swipswaps.github.io/receipts-ocr/"
-RAG_SITE="https://swipswaps.github.io/receipts-ocr-rag/"
 RAG_LOCAL="http://localhost:3000/"
 RAG2_SITE="https://swipswaps.github.io/receipts-ocr-rag-v2/"
 
@@ -29,7 +38,6 @@ say() { printf '%s\n' "$*"; }
 die() { printf '[error] %s\n' "$*" >&2; exit 2; }
 compose() { [ -f "$1/docker-compose.yml" ] || die "missing $1/docker-compose.yml (set RECEIPTS_DIR or OCR_DIR/RAG_DIR/RAG2_DIR)"; ( cd "$1" && docker compose up -d ); }
 down_one() { [ -f "$1/docker-compose.yml" ] && ( cd "$1" && docker compose down ); return 0; }
-
 down_all() { down_one "$OCR_DIR"; down_one "$RAG_DIR"; down_one "$RAG2_DIR"; }
 
 wait_health() {
@@ -50,13 +58,13 @@ up_one() {
     say "--> waiting for $health"
     wait_health "$health" || die "backend did not become healthy at $health (docker compose logs)"
     say ""
-    say "backend: healthy"
+    say "backend: healthy (this is the state the client detects)"
     say "open:    $site"
-    say "keep this backend running while you capture; then run: demo.sh down"
+    say "record:  ./receipts-demo/probe.sh up"
+    say "stop:    ./receipts-demo/demo.sh down"
 }
 
 doctor() {
-    local d
     say "docker:  $(have docker && docker --version || printf missing)"
     say "compose: $(docker compose version 2>&1 | head -1)"
     say "ocr:     $OCR_DIR $([ -f "$OCR_DIR/docker-compose.yml" ] && printf '[ok]' || printf '[missing]')"
@@ -64,14 +72,16 @@ doctor() {
     say "rag2:    $RAG2_DIR $([ -f "$RAG2_DIR/docker-compose.yml" ] && printf '[ok]' || printf '[missing]')"
     say "playwright: $(have npx && printf 'npx available (run: npx playwright install chromium)' || printf missing)"
     say ""
-    say "If any repo is [missing], find it and set RECEIPTS_DIR, e.g.:"
-    say "  find ~/Documents -maxdepth 4 -type d -name receipts-ocr"
+    say "Repos default to \$RECEIPTS_DIR/<name> then ~/Documents/<name>."
+    say "On this host they are at ~/Documents/<name>, so: export RECEIPTS_DIR=~/Documents"
 }
 
 case "${1:-doctor}" in
     doctor) doctor ;;
+    state) bash "$HERE/probe.sh" state ;;
+    probe) shift; bash "$HERE/probe.sh" "$@" ;;
     ocr) up_one "$OCR_DIR" "http://localhost:5001/health" "$OCR_SITE" ;;
-    rag) up_one "$RAG_DIR" "http://localhost:5001/" "$RAG_LOCAL (local; the Pages site is PNA-restricted)" ;;
+    rag) up_one "$RAG_DIR" "http://localhost:5001/" "$RAG_LOCAL (local; Pages is PNA-restricted)" ;;
     rag2) up_one "$RAG2_DIR" "http://localhost:5001/health" "$RAG2_SITE" ;;
     down) down_all; say "stopped all receipts stacks" ;;
     shot)
@@ -81,6 +91,6 @@ case "${1:-doctor}" in
             || die "screenshot failed; run: npx playwright install chromium"
         say "wrote $out" ;;
     *)
-        say "usage: demo.sh [doctor|ocr|rag|rag2|down|shot <url> <out.png>]" >&2
+        say "usage: demo.sh [doctor|state|probe <args>|ocr|rag|rag2|down|shot <url> <out.png>]" >&2
         exit 2 ;;
 esac

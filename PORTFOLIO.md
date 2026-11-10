@@ -52,6 +52,10 @@ These are the engineering-heavy pieces. They are **local-first**: the GitHub Pag
 intelligence runs on your machine. That is deliberate — evidence and data stay local — but it means the advanced
 features unlock only when the page is **connected** to the local backend.
 
+The claim being evidenced is not OCR quality. It is **progressive enhancement under verified capability detection**:
+the client probes the backend, exposes the state, gates the strong path on it, and labels the fallback. The domain
+features are incidental; the artefact is the down → up → probe → code-branch evidence set.
+
 | Project | Live frontend | Connect the backend | What unlocks when connected | Without a backend |
 |---|---|---|---|---|
 | **receipts-ocr** | [live](https://swipswaps.github.io/receipts-ocr/) · [source](https://github.com/swipswaps/receipts-ocr) | `docker compose up -d`, then open the Pages URL (frontend calls `localhost:5001`) | PaddleOCR v3+ with column-first layout analysis, smart block grouping into addresses/items/tables, orientation auto-correction, HEIC/EXIF handling, 5 exports (Text/JSON/CSV/XLSX/SQL), live backend logs over SSE, SQLite persistence, LAN/phone access | automatic **Tesseract.js** fallback (works anywhere, lower accuracy) |
@@ -69,7 +73,7 @@ will see a frontend shell (and the RAG v1 page is limited by the browser's Priva
 system is one command away locally. If you will not run Docker, ask me for a recorded walkthrough — do not judge the
 OCR/RAG work from the static page alone.
 
-Capture/reproduce it: `receipts-demo/SCREENSHOTS.md` is the annotated shot list and `receipts-demo/demo.sh` starts one backend at a time and health-checks it.
+Capture/reproduce it: `receipts-demo/SCREENSHOTS.md` is the capability-gating evidence set (down → up → probe → code branch); `receipts-demo/demo.sh` switches the state and `probe.sh` records reachability.
 
 ## Reproduce in five minutes
 

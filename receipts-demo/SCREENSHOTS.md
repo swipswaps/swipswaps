@@ -1,79 +1,98 @@
-# Receipts family — evidence you can judge without Docker
+# Capability gating — evidence you can judge without Docker
 
-The three receipts systems are local-first: the GitHub Pages URL is the client and the intelligence runs on a
-local backend. That is the design, but it means a reviewer who only clicks the link sees a shell. This checklist
-captures the connected behaviour **once**; commit the PNGs under `receipts-demo/shots/` so the portfolio shows
-real evidence and nobody has to run Docker to judge it.
+The receipts systems exist to demonstrate a **technique**, not to show off OCR or RAG output:
 
-## Before you start
+> probe the environment → derive a connection state → gate the advanced path on that state → show a labelled
+> fallback when the capability is absent → re-probe so the state cannot go stale.
+
+That is *progressive enhancement with verified capability detection*. The domain features (PaddleOCR, semantic
+search) are the payload; the thing worth reviewing is how the client decides it may use them.
+
+Capture this once, commit the artifacts under `receipts-demo/shots/`, and a reviewer never has to run Docker.
+
+## The pattern, and where it lives
+
+| Step | receipts-ocr | Dev Log RAG v1 | Dev Log RAG v2 |
+|---|---|---|---|
+| **Probe** | `checkBackendHealth()` → `localhost:5001/health` | `fetch(API_BASE)` | `fetch(${API_BASE}/api/health)` every 15 s |
+| **State** | `backendHealth.status: checking → healthy/unhealthy` | `#status` class `online/offline` | `status: checking → online/offline` |
+| **Gate** | `backendHealth.status === 'healthy'` enables history/save/exports; else `processWithTesseract` | Online enables upload/search/patterns | `status !== 'online'` blocks upload, search, patterns |
+| **Fallback** | log: *"Docker backend unavailable, using Tesseract.js fallback"* | text: *"Backend Offline"* | text: *"❌ Offline"* + *"Run backend locally for full features"* |
+| **Reset** | manual re-check button | page reload | 15 s interval |
+
+Base-URL selection is itself part of the technique: `receipts-ocr/src/config.ts` and
+`receipts-ocr-rag-v2/src/config.ts` choose `API_BASE` from `window.location.hostname` (GitHub Pages → `localhost:5001`;
+LAN → that host). The deployment fix for v2 (`fix-gh-pages-receipts-ocr-rag-v2.sh`) is the same concern: make the
+hosted client look at the right local origin.
+
+## Evidence set
+
+Capture each **pair**, plus the raw probe. The pair is the proof: same page, different capability, different UI.
+
+| # | File | State | What must be visible |
+|---|---|---|---|
+| 01 | `shots/01-ocr-offline.png` | backend stopped | fallback log line; history/save/exports disabled |
+| 02 | `shots/02-ocr-online.png` | backend up | engine **PaddleOCR**, database **PostgreSQL**, advanced controls enabled |
+| 03 | `shots/probe-down.jsonl` | backend stopped | `state:"unavailable"`, `http:"000"` for all three |
+| 04 | `shots/04-rag1-offline.png` | backend stopped | `#status` = **Backend Offline** |
+| 05 | `shots/05-rag1-online.png` | backend up | `#status` = **Online — N entries indexed** |
+| 06 | `shots/06-rag2-offline.png` | backend stopped | **❌ Offline** + *"Run backend locally for full features"* |
+| 07 | `shots/07-rag2-online.png` | backend up | **✅ Online**; upload/search/patterns enabled |
+| 08 | `shots/probe-up.jsonl` | backend up | `state:"connected"`, `http:"200"`, health body excerpt |
+| 09 | `shots/09-gate-code.png` | either | the exact branch: `config.ts` base choice + the `status === ...` gate |
+
+Do **not** lead with OCR text or RAG result quality. A cropped screenshot of the condition and the resulting control
+state is the evidence.
+
+## Steps
 
 ```bash
-# Docker + compose must be installed.
-npx playwright install chromium          # for the headless landing shots
-export RECEIPTS_DIR=~/Documents/82ff64b4-acf6-4a50-95e1-9c474107cdf6
-# or set OCR_DIR / RAG_DIR / RAG2_DIR individually.
-
-./receipts-demo/demo.sh doctor           # shows which repos were found
+export RECEIPTS_DIR=...            # or OCR_DIR / RAG_DIR / RAG2_DIR
+./receipts-demo/demo.sh doctor
 ```
 
-**Port rule:** all three backends bind `:5001`, so `demo.sh` runs **one stack at a time** — it stops the others
-before starting the next. Capture, then `./receipts-demo/demo.sh down`.
-
-## The shot list
-
-| # | File | Stack | What must be visible | Caption / what it proves |
-|---|---|---|---|---|
-| 01 | `shots/01-ocr-connected.png` | `demo.sh ocr` → OCR Pages URL | backend status healthy, engine **PaddleOCR**, database **PostgreSQL** | "The hosted UI is connected to the local PaddleOCR backend." |
-| 02 | `shots/02-ocr-extracted.png` | same | uploaded `test_image.png`, extracted text + parsed fields | "PaddleOCR output on a real image, with layout preserved." |
-| 03 | `shots/03-ocr-exports.png` | same | the five export choices (Text/JSON/CSV/XLSX/SQL) | "Results are exportable, not just displayed." |
-| 04 | `shots/04-ocr-fallback.png` | `demo.sh down`, reload OCR Pages | **Tesseract.js fallback** notice | "The deployed page degrades gracefully with no backend." |
-| 05 | `shots/05-rag-patterns.png` | `demo.sh rag` → `http://localhost:3000` | uploaded `samples/incident.log`; **Repeated Errors** and **Error to Solutions** | "Logs are parsed into errors, commands and fixes." |
-| 06 | `shots/06-rag-search.png` | same | query "command that succeeded"; results with provenance and badges | "Search returns evidence, not a confidence score." |
-| 07 | `shots/07-rag2-patterns.png` | `demo.sh rag2` → v2 Pages URL | backend online; uploaded sample; patterns/search | "v2 keeps the same extract → search → patterns contract." |
-| 08 | `shots/08-rag-graph.json` | `demo.sh rag` | output of `/rag/graph` | "Every extracted item has provenance (the evidence graph)." |
-
-## Steps in detail
-
-### 01–03 — receipts-ocr (PaddleOCR)
+### Receipts OCR (States 01–03)
 
 ```bash
+# State A: capability absent
+./receipts-demo/demo.sh down
+./receipts-demo/probe.sh > receipts-demo/shots/probe-down.jsonl
+
+# State B: capability present
 ./receipts-demo/demo.sh ocr
-# open https://swipswaps.github.io/receipts-ocr/
-# headless option (after the backend is healthy):
-./receipts-demo/demo.sh shot https://swipswaps.github.io/receipts-ocr/ receipts-demo/shots/01-ocr-connected.png
+./receipts-demo/probe.sh > receipts-demo/shots/probe-up.jsonl
+
+# Headless screenshot of the connected page (after health is green)
+./receipts-demo/demo.sh shot https://swipswaps.github.io/receipts-ocr/ receipts-demo/shots/02-ocr-online.png
 ```
 
-Then, in the page:
+Then capture `01-ocr-offline.png` after `demo.sh down` and a reload. In both cases capture the same region: connection
+indicator, engine/database, and whether history/save are enabled.
 
-1. Confirm the header shows the backend healthy and the engine as PaddleOCR (01).
-2. Upload the repo's `test_image.png` (400×100). Click **Extract Text**. Wait for the result panel (02).
-3. Open the export control and capture the five formats (03).
-4. `./receipts-demo/demo.sh down`, reload the page, capture the Tesseract.js fallback banner (04).
-
-### 05–06 — Dev Log RAG v1
+### Dev Log RAG v1 (States 04–05)
 
 ```bash
 ./receipts-demo/demo.sh rag
-# open http://localhost:3000/   (use the local frontend: the Pages site is PNA-restricted)
+# open http://localhost:3000/  (local frontend; the Pages site is PNA-restricted)
 ```
 
-1. Upload `receipts-demo/samples/incident.log` with the file picker.
-2. Click **Show Patterns**; capture the **Repeated Errors** and **Error to Solutions** tabs (05).
-3. Search `command that succeeded`; capture the ranked results with their badges (06).
-4. Save the graph data:
+Capture `#status` online, then `demo.sh down` and reload for `#status` offline.
 
-```bash
-curl -s http://localhost:5001/rag/graph -o receipts-demo/shots/08-rag-graph.json
-```
-
-### 07 — Dev Log RAG v2
+### Dev Log RAG v2 (States 06–07)
 
 ```bash
 ./receipts-demo/demo.sh rag2
 # open https://swipswaps.github.io/receipts-ocr-rag-v2/
 ```
 
-Upload the same sample, then capture the connected state, patterns and search (07).
+Capture ✅ Online with *"Run backend locally for full features"* absent, then stop the backend and capture the same
+area showing ❌ Offline and the hint present.
+
+### Code branch (State 09)
+
+Open the file and screenshot the two lines that matter — the `API_BASE` branch in `config.ts` and the
+`status === 'online'` / `backendHealth.status === 'healthy'` gate. This shows the technique is in the code, not just
+the caption.
 
 ### Stop
 
@@ -81,19 +100,18 @@ Upload the same sample, then capture the connected state, patterns and search (0
 ./receipts-demo/demo.sh down
 ```
 
-## Embedding the shots
-
-Put the PNGs in `receipts-demo/shots/` and reference them from the receipts section:
+## Embedding
 
 ```markdown
-![PaddleOCR backend connected](receipts-demo/shots/01-ocr-connected.png)
-*Hosted UI connected to the local PaddleOCR backend (`receipts-ocr`, commit `…`).*
-```
+| Capability absent | Capability present |
+|---|---|
+| ![offline](receipts-demo/shots/01-ocr-offline.png) | ![online](receipts-demo/shots/02-ocr-online.png) |
 
-A short screen recording (10–20 s: upload → extract → result) is stronger than a still for 02 and 05; if you add
-one, put it at `shots/ocr-demo.mp4` and link it.
+Raw probes: [`probe-down.jsonl`](receipts-demo/shots/probe-down.jsonl) ·
+[`probe-up.jsonl`](receipts-demo/shots/probe-up.jsonl).
+```
 
 ## Honesty rule
 
-If a shot was not captured against a running backend, do not ship it. A labelled "not captured" is better than a
-screenshot that implies a connection that did not happen.
+Every "present" shot must have its matching `probe-up.jsonl` record taken in the same session. If a state was not
+captured against a running backend, label it "not captured" rather than shipping an implied connection.
