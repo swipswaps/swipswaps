@@ -69,6 +69,8 @@ will see a frontend shell (and the RAG v1 page is limited by the browser's Priva
 system is one command away locally. If you will not run Docker, ask me for a recorded walkthrough — do not judge the
 OCR/RAG work from the static page alone.
 
+Capture/reproduce it: `receipts-demo/SCREENSHOTS.md` is the annotated shot list and `receipts-demo/demo.sh` starts one backend at a time and health-checks it.
+
 ## Reproduce in five minutes
 
 ```bash
