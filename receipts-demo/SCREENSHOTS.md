@@ -22,8 +22,9 @@ Capture this once, commit the artifacts under `receipts-demo/shots/`, and a revi
 
 Base-URL selection is itself part of the technique: `receipts-ocr/src/config.ts` and
 `receipts-ocr-rag-v2/src/config.ts` choose `API_BASE` from `window.location.hostname` (GitHub Pages → `localhost:5001`;
-LAN → that host). The deployment fix for v2 (`fix-gh-pages-receipts-ocr-rag-v2.sh`) is the same concern: make the
-hosted client look at the right local origin.
+LAN → that host). The client's origin choice lives in `config.ts`. The separate
+`fix-gh-pages-receipts-ocr-rag-v2.sh` does **not** touch it — it only fixes deployment (branch/Pages); see
+"Deployment is not the capability" below.
 
 ## Evidence set
 
@@ -38,7 +39,7 @@ Capture each **pair**, plus the raw probe. The pair is the proof: same page, dif
 | 05 | `shots/05-rag1-online.png` | backend up | `#status` = **Online — N entries indexed** |
 | 06 | `shots/06-rag2-offline.png` | backend stopped | **❌ Offline** + *"Run backend locally for full features"* |
 | 07 | `shots/07-rag2-online.png` | backend up | **✅ Online**; upload/search/patterns enabled |
-| 08 | `shots/probe-up.jsonl` | backend up | `state:"connected"`, `http:"200"`, health body excerpt |
+| 08 | `shots/probe-<stack>-up.jsonl` | backend up | `state:"connected"`, `http:"200"`, health body excerpt |
 | 09 | `shots/09-gate-code.png` | either | the exact branch: `config.ts` base choice + the `status === ...` gate |
 
 Do **not** lead with OCR text or RAG result quality. A cropped screenshot of the condition and the resulting control
@@ -51,6 +52,9 @@ export RECEIPTS_DIR=...            # or OCR_DIR / RAG_DIR / RAG2_DIR
 ./receipts-demo/demo.sh doctor
 ```
 
+Because `demo.sh` runs one backend at a time, name each probe file for the stack that was up:
+`probe-ocr-up.jsonl`, `probe-rag-up.jsonl`, `probe-rag2-up.jsonl`.
+
 ### Receipts OCR (States 01–03)
 
 ```bash
@@ -60,7 +64,7 @@ export RECEIPTS_DIR=...            # or OCR_DIR / RAG_DIR / RAG2_DIR
 
 # State B: capability present
 ./receipts-demo/demo.sh ocr
-./receipts-demo/probe.sh > receipts-demo/shots/probe-up.jsonl
+./receipts-demo/probe.sh > receipts-demo/shots/probe-ocr-up.jsonl
 
 # Headless screenshot of the connected page (after health is green)
 ./receipts-demo/demo.sh shot https://swipswaps.github.io/receipts-ocr/ receipts-demo/shots/02-ocr-online.png
@@ -108,10 +112,25 @@ the caption.
 | ![offline](receipts-demo/shots/01-ocr-offline.png) | ![online](receipts-demo/shots/02-ocr-online.png) |
 
 Raw probes: [`probe-down.jsonl`](receipts-demo/shots/probe-down.jsonl) ·
-[`probe-up.jsonl`](receipts-demo/shots/probe-up.jsonl).
+[`probe-ocr-up.jsonl`](receipts-demo/shots/probe-ocr-up.jsonl).
 ```
+
+## Deployment is not the capability
+
+`fix-gh-pages-receipts-ocr-rag-v2.sh` is release plumbing, not detection. It aligns the workflow trigger to `master`,
+re-enables Pages, updates the README, and commits. It never touches `config.ts` or the health probe. Three cautions
+from reading it against the current repos:
+
+- Its `cd` hardcodes `.../notes/receipts-ocr-rag-v2`, which does not match the repo location
+  (`.../notes/clipboard-matcher/receipts-ocr-rag-v2`), so re-running it today fails at the first line.
+- It enables Pages as a legacy branch build (`master`, `/dist`), while `deploy.yml` now publishes an artifact
+  (`upload-pages-artifact` → `deploy-pages`) on `master`. Do not mix the two; the workflow is the source of truth.
+- It uses `sed -i`. If it must be re-run, use `awk` or Python (the repo's own rules discourage `sed`).
+
+None of this affects the capability evidence: the client's state comes from the HTTP probe, not from how the static
+bundle was published. Keep deployment fixes out of the technique narrative.
 
 ## Honesty rule
 
-Every "present" shot must have its matching `probe-up.jsonl` record taken in the same session. If a state was not
+Every "present" shot must have its matching `probe-<stack>-up.jsonl` record taken in the same session. If a state was not
 captured against a running backend, label it "not captured" rather than shipping an implied connection.
