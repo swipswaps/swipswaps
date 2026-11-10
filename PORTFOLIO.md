@@ -46,48 +46,27 @@ What they share:
 - **Calibrate with other reviewers** — `gomeasure` derives calibration from two independent reviewers
   (0 disagreements → 2, every criterion disputed → 0); `micro1` is pairwise by construction.
 
-## Advanced systems — the receipts-ocr family (connected mode)
+## Portfolio showcase
 
-These are the engineering-heavy pieces. They are **local-first**: the GitHub Pages site is the interface, and the
-intelligence runs on your machine. That is deliberate — evidence and data stay local — but it means the advanced
-features unlock only when the page is **connected** to the local backend.
+The index that ties these together:
+[swipswaps-portfolio-showcase](https://swipswaps.github.io/swipswaps-portfolio-showcase/) ·
+[source](https://github.com/swipswaps/swipswaps-portfolio-showcase).
 
-The claim being evidenced is not OCR quality. It is **progressive enhancement under verified capability detection**:
-the client probes the backend, exposes the state, gates the strong path on it, and labels the fallback. The domain
-features are incidental; the artefact is the down → up → probe → code-branch evidence set.
+It is a 3D repository index, and it demonstrates the same capability discipline as the instruments: the page picks
+its API base from the host (`github.io` → the local HTTPS proxy, `localhost` → local HTTP), probes `/api/health`,
+shows **Server: Online / Offline (fallback)**, and falls back to the GitHub API when no local backend is present.
+Detect the environment, expose the state, gate the strong path, label the fallback.
 
-| Project | Live frontend | Connect the backend | What unlocks when connected | Without a backend |
-|---|---|---|---|---|
-| **receipts-ocr** | [live](https://swipswaps.github.io/receipts-ocr/) · [source](https://github.com/swipswaps/receipts-ocr) | `docker compose up -d`, then open the Pages URL (frontend calls `localhost:5001`) | PaddleOCR v3+ with column-first layout analysis, smart block grouping into addresses/items/tables, orientation auto-correction, HEIC/EXIF handling, 5 exports (Text/JSON/CSV/XLSX/SQL), live backend logs over SSE, SQLite persistence, LAN/phone access | automatic **Tesseract.js** fallback (works anywhere, lower accuracy) |
-| **receipts-ocr-rag** | [live](https://swipswaps.github.io/receipts-ocr-rag/) · [source](https://github.com/swipswaps/receipts-ocr-rag) | `docker compose up -d`; FastAPI on `:5001` | ingest chat/terminal/receipt logs; extract code blocks, errors, commands and success indicators; semantic search (sentence-transformers); patterns (repeated errors, common commands, working code, error→solution); `/rag/graph` evidence graph; hashes + spans + verification states | static shell; no ingestion or search |
-| **receipts-ocr-rag-v2** | [live](https://swipswaps.github.io/receipts-ocr-rag-v2/) · [source](https://github.com/swipswaps/receipts-ocr-rag-v2) | `docker compose up -d`; backend on `:5001` (`/api/health`) | v2.0.5 of the same contract, rebuilt frontend; the same extract → search → patterns flow | static shell; no ingestion or search |
-
-**Why this matters for a reviewer role.** The RAG work encodes the same principle as the rubrics: *never trust a
-model's self-reported confidence; require deterministic evidence.* The README models each extracted item as
-`source → observation → evidence → claim → entity`, with a content hash, a source span, timestamps, and a
-verification state (`PROPOSED → EXECUTED → VERIFIED → CORROBORATED / REJECTED`). The roadmap is an agentic knowledge
-CRM over MCP + LiteLLM, with the model swappable and the evidence model fixed.
-
-**Honest caveat for anyone evaluating this.** If you click the receipts live links without starting the backend you
-will see a frontend shell (and the RAG v1 page is limited by the browser's Private Network Access rules). The full
-system is one command away locally. If you will not run Docker, ask me for a recorded walkthrough — do not judge the
-OCR/RAG work from the static page alone.
-
-Capture/reproduce it: `receipts-demo/SCREENSHOTS.md` is the capability-gating evidence set (down → up → probe → code branch); `receipts-demo/demo.sh` switches the state and `probe.sh` records reachability.
+Application letters are tailored per employer from these instruments and their live `matrix.json`; they are not
+published here.
 
 ## Reproduce in five minutes
 
 ```bash
-# Any reviewer artefact
 git clone https://github.com/swipswaps/<artefact>
 cd <artefact>
 npm ci && npm run review      # prints the discrimination matrix and "sound: yes"
 npm run build && npx playwright test
-
-# Receipts OCR, full mode
-git clone https://github.com/swipswaps/receipts-ocr && cd receipts-ocr
-docker compose up -d          # ~2 GB first run; wait for "PaddleOCR initialized successfully"
-# then open https://swipswaps.github.io/receipts-ocr/
 ```
 
 ## Limits I will defend, not hide
@@ -96,7 +75,6 @@ docker compose up -d          # ~2 GB first run; wait for "PaddleOCR initialized
 - The non-calibration meta-scores are authored, not measured from live raters.
 - Hidden cases are not exhaustive; `edge-case-solution-reviewer` now runs candidates in a bounded child process,
   but `node:vm` is still not a security boundary (documented in that repo).
-- The receipts systems are local-first prototypes; the hosted pages require a local backend for full behaviour.
 - The review artefacts are English-only.
 
 ---
